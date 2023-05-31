@@ -36,7 +36,7 @@ use Shopify\Auth\OAuthCookie;
 	                         ' Type: ' . print_r($this->pType, true));
 	}
 // I like to see my queries, even when substituting parameters.  
-        public function getGraphqlQuery() : string {
+        public function getGraphqlCreateQuery() : string {
 	    $pName = $this->pName;
 	    $pType = $this->pType;
 	    $pPrice = $this->pPrice;
@@ -45,6 +45,23 @@ use Shopify\Auth\OAuthCookie;
 $query = <<<QUERY
   mutation {
     productCreate(input: {title: "$pName", productType: "$pType", variants: {price: "$pPrice",sku: "075090851230"}, vendor: "JadedPixel"}) {
+      product {
+        id
+      }
+    }
+  }
+QUERY;
+            return $query;	      		
+	}
+        public function getGraphqlUpdateQuery(string $id) : string {
+	    $pName = $this->pName;
+	    $pType = $this->pType;
+	    $pPrice = $this->pPrice;
+// Leave the heredoc query code unindented to allow quick id of queries.
+// We have the product by id for a given variant.  Update the values.  This doesn't handle multiple variants yet.
+$query = <<<QUERY
+  mutation {
+    productUpdate(input: {id: "$id", title: "$pName", productType: "$pType", variants: {price: "$pPrice",sku: "075090851230"}, vendor: "JadedPixel"}) {
       product {
         id
       }
@@ -64,6 +81,7 @@ $query = <<<QUERY
       cursor
       node {
         id
+	product { id }
         sku
       }
     }
@@ -107,19 +125,33 @@ QUERY;
          	 );
 	     // of all of the methods I considered, graphql was cleanest.	 
 	     $dup_query = $fields->getIsProductDupQuery();
-	     $query = $fields->getGraphqlQuery();
              $this->logger->debug('dup_query: ' . print_r($dup_query, true));
-             $this->logger->debug('query: ' . print_r($query, true));
              $client = new Graphql($_ENV['SHOPIFY_APP_HOST_NAME'],
 	                           $_ENV['SHOPIFY_ADMIN_API_ACCESS_TOKEN']);
 	     //Some things that still bug me are that any edit of a product results in
 	     //an update event.  I would like to filter on update type, but instead, I'm
 	     //going to move forward with dupe management via sku.
 	     $response = $client->query(["query" => $dup_query]);
-             $this->logger->debug('dup_query response: ' . print_r($response, true));
-	     $response = $client->query(["query" => $query]);
-             $this->logger->debug('query response: ' . print_r($response, true));
-	     return true;
+	     $graphql_variables = json_decode($response->getBody()->getContents(),true);
+             $this->logger->debug('dup_query response: ' . print_r($graphql_variables, true));
+	     $count = count($graphql_variables['data']['productVariants']['edges']);
+$count = 1;
+	     if($count<1){
+         	     $query = $fields->getGraphqlCreateQuery();
+		     $this->logger->debug('query: ' . print_r($query, true));
+
+	             $response = $client->query(["query" => $query]);
+	             $graphql_variables = $response->getBody()->getContents();
+	             $this->logger->debug('query response: ' . print_r($graphql_variables, true));
+	     }else{
+		     $product_id = $graphql_variables['data']['productVariants']['edges'][0]['node']['product']['id'];
+	     	     $query = $fields->getGraphqlUpdateQuery($product_id);
+                     $this->logger->debug('query: ' . print_r($query, true));
+	     	     $this->logger->debug('existing product for sku, updating. count: ' . $count);
+		     $response = $client->query(["query" => $query]);
+	             $graphql_variables = $response->getBody()->getContents();
+	             $this->logger->debug('query response: ' . print_r($graphql_variables, true));
+	     }
         }
 
 	return false;
