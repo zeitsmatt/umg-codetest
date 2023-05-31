@@ -136,6 +136,7 @@ QUERY;
              $this->logger->debug('dup_query response: ' . print_r($graphql_variables, true));
 	     $count = count($graphql_variables['data']['productVariants']['edges']);
 $count = 1;
+//more than 0 means we have an existing {product,variant} object
 	     if($count<1){
          	     $query = $fields->getGraphqlCreateQuery();
 		     $this->logger->debug('query: ' . print_r($query, true));
