@@ -26,13 +26,15 @@ use Shopify\Auth\OAuthCookie;
 	protected string $pSku = "075090851230";
 	protected LoggerInterface $logger;
 	
-        public function __construct(string $Name, float $Price, string $Type,LoggerInterface $pLogger){
+        public function __construct(string $Name, float $Price, string $Type,string $Sku, LoggerInterface $pLogger){
 	    $this->logger = $pLogger;
             $this->pName = $Name;
 	    $this->pPrice = $Price;
 	    $this->pType = $Type;
+	    $this->pSku = $Sku;
 	    $this->logger->debug('Name: ' . print_r($this->pName, true) .
 	                         ' Price: ' . print_r($this->pPrice, true) .
+	                         ' Sku: ' . print_r($this->pSku, true) .
 	                         ' Type: ' . print_r($this->pType, true));
 	}
 // I like to see my queries, even when substituting parameters.  
@@ -40,11 +42,12 @@ use Shopify\Auth\OAuthCookie;
 	    $pName = $this->pName;
 	    $pType = $this->pType;
 	    $pPrice = $this->pPrice;
+	    $pSku = $this->pSku;
 // Leave the heredoc query code unindented to allow quick id of queries.
 // Pricing and sku are already available in variants.  This makes sense from an e-comm pov.
 $query = <<<QUERY
   mutation {
-    productCreate(input: {title: "$pName", productType: "$pType", variants: {price: "$pPrice",sku: "075090851230"}, vendor: "JadedPixel"}) {
+    productCreate(input: {title: "$pName", productType: "$pType", variants: {price: "$pPrice",sku: "$pSku"}, vendor: "JadedPixel"}) {
       product {
         id
       }
@@ -57,11 +60,12 @@ QUERY;
 	    $pName = $this->pName;
 	    $pType = $this->pType;
 	    $pPrice = $this->pPrice;
+	    $pSku = $this->pSku;
 // Leave the heredoc query code unindented to allow quick id of queries.
 // We have the product by id for a given variant.  Update the values.  This doesn't handle multiple variants yet.
 $query = <<<QUERY
   mutation {
-    productUpdate(input: {id: "$id", title: "$pName", productType: "$pType", variants: {price: "$pPrice",sku: "075090851230"}, vendor: "JadedPixel"}) {
+    productUpdate(input: {id: "$id", title: "$pName", productType: "$pType", variants: {price: "$pPrice",sku: "$pSku"}, vendor: "JadedPixel"}) {
       product {
         id
       }
@@ -106,6 +110,7 @@ QUERY;
      {
 
          $object = $event->getObject();
+	 $this->logger->debug('$object: ' . print_r($object->getProperty('Sku'), true));
 	 if ($object instanceof \Pimcore\Model\DataObject\Product) {
 
 	     $fields = $this->getProductFields($object);
@@ -135,8 +140,6 @@ QUERY;
 	     $graphql_variables = json_decode($response->getBody()->getContents(),true);
              $this->logger->debug('dup_query response: ' . print_r($graphql_variables, true));
 	     $count = count($graphql_variables['data']['productVariants']['edges']);
-$count = 1;
-//more than 0 means we have an existing {product,variant} object
 	     if($count<1){
          	     $query = $fields->getGraphqlCreateQuery();
 		     $this->logger->debug('query: ' . print_r($query, true));
@@ -162,6 +165,7 @@ $count = 1;
             return new ProductFields($object->getName(),
                                   $object->getPrice(),
                                   $object->getMedia_type(),
+				  $object->getProperty('Sku'),
 				  $this->logger);
      }
 }
